@@ -19,7 +19,7 @@ use OpenTelemetry\SemConv\ResourceAttributes;
 
 final class MwApmCollector {
 
-    private int $exportPort = 9321;
+    private int $exportPort = 9320;
     private string $projectName;
     private string $serviceName;
     private TracerInterface $tracer;

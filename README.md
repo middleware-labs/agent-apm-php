@@ -3,9 +3,13 @@
 ### agent-apm-php
 Description: Agent APM for PHP
 
+### Prequisites
+* To monitor APM data on dashboard, [Middleware Host-agent](https://docs.middleware.io/docs/getting-started) needs to be installed.
+
+
 ### Guides
 To use this APM agent, you need to follow below steps:
-1. Run `code composer require middleware/agent-apm-php` in your project directory.
+1. Run `composer require middleware/agent-apm-php` in your project directory.
 2. After successful installation, you need to add `require 'vendor/autoload.php';` in your file.
 3. Then after, you need to add `use Middleware\AgentApmPhp\MwApmCollector;` line.
 4. Now, you need to add following code in your desired function of any class. This will collect the data, Like: called ClassName, FunctionName, TargetFile and send it to the Middleware Dashboard:
@@ -26,6 +30,8 @@ To use this APM agent, you need to follow below steps:
          'custom.attr1' => 'value1',
     ]);
     ```
+*Note: OTEL collector endpoint for all the traces, will be `http://localhost:9320/v1/traces` by default.*
+
 ### Sample Code
 ```
 <?php
