@@ -11,7 +11,7 @@ class DoThings {
 class DemoClass {
     public static function printFunction(): void {
 
-        $mwCollector = new MwApmCollector('DemoProject2', 'PrintService2');
+        $mwCollector = new MwApmCollector('DemoProject', 'PrintService');
         $mwCollector->tracingCall(get_called_class(), __FUNCTION__, __FILE__, [
             'code.lineno' => '10',
             'code.column' => '12',
