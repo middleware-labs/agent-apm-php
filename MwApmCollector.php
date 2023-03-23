@@ -19,12 +19,17 @@ use OpenTelemetry\SemConv\ResourceAttributes;
 
 final class MwApmCollector {
 
+    private string $host = 'localhost';
     private int $exportPort = 9320;
     private string $projectName;
     private string $serviceName;
     private TracerInterface $tracer;
 
     public function __construct(string $projectName = null, string $serviceName = null) {
+
+        if (!empty(getenv('MW_AGENT_SERVICE'))) {
+            $this->host = getenv('MW_AGENT_SERVICE');
+        }
 
         if (empty($projectName)) {
             $projectName = 'Project-'. getmypid();
@@ -38,7 +43,7 @@ final class MwApmCollector {
         $this->serviceName = $serviceName;
 
         $transport = (new OtlpHttpTransportFactory())->create(
-            'http://localhost:' . $this->exportPort . '/v1/traces',
+            'http://' . $this->host . ':' . $this->exportPort . '/v1/traces',
             'application/x-protobuf');
 
         $exporter = new SpanExporter($transport);
