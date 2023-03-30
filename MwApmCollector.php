@@ -11,11 +11,16 @@ use OpenTelemetry\Contrib\Otlp\SpanExporter;
 use OpenTelemetry\SDK\Common\Attribute\Attributes;
 use OpenTelemetry\SDK\Common\Configuration\Variables;
 use OpenTelemetry\SDK\Resource\ResourceInfo;
-use OpenTelemetry\Sdk\Trace\Span;
+use OpenTelemetry\SDK\Trace\Span;
 use OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor;
 use OpenTelemetry\SDK\Trace\TracerProvider;
 use OpenTelemetry\API\Trace\TracerInterface;
 use OpenTelemetry\SemConv\ResourceAttributes;
+use OpenTelemetry\SemConv\TraceAttributes;
+
+use OpenTelemetry\API\Common\Instrumentation;
+use function OpenTelemetry\Instrumentation\hook;
+use Throwable;
 
 final class MwApmCollector {
 
@@ -24,6 +29,9 @@ final class MwApmCollector {
     private string $projectName;
     private string $serviceName;
     private TracerInterface $tracer;
+
+    private Instrumentation\Configurator $scope;
+    private TracerProvider $tracerProvider;
 
     public function __construct(string $projectName = null, string $serviceName = null) {
 
@@ -58,62 +66,119 @@ final class MwApmCollector {
             ]))
         );
 
-        // $this->tracer = $tracerProvider->getTracer('io.opentelemetry.contrib.php', '1.0.0');
-        $this->tracer = $tracerProvider->getTracer('middleware/agent-apm-php', 'dev-master');
+        // $tracer = $tracerProvider->getTracer('io.opentelemetry.contrib.php', '1.0.0');
+        $tracer = $tracerProvider->getTracer('middleware/agent-apm-php', 'dev-master');
+
+        $scope = Instrumentation\Configurator::create()
+            ->withTracerProvider($tracerProvider);
+
+        $this->tracerProvider = $tracerProvider;
+        $this->tracer = $tracer;
+        $this->scope = $scope;
+
     }
 
-    public function preTracingCall(
-        ?string $className,
-        string $functionName,
-        ?string $fileName,
-        ?iterable $attributes = null): void {
-        $span = $this->tracer->spanBuilder(sprintf('%s::%s', $className, $functionName))
-            ->setAttribute('service.name', $this->serviceName)
-            ->setAttribute('project.name', $this->projectName)
-            ->setAttribute('code.function', $functionName)
-            ->setAttribute('code.namespace', $className)
-            ->setAttribute('code.filepath', $fileName);
+    public function registerHook(string $className, string $functionName, ?iterable $attributes = null): void {
+        $tracer = $this->tracer;
+        $serviceName = $this->serviceName;
+        $projectName = $this->projectName;
 
-        if (!empty($attributes)) {
-            foreach ($attributes as $key => $value) {
-                $span->setAttribute($key, $value);
+        hook(
+            $className,
+            $functionName,
+            static function ($object, ?array $params, ?string $class, string $function, ?string $filename, ?int $lineno) use ($tracer, $serviceName, $projectName, $attributes) {
+                $span = $tracer->spanBuilder(sprintf('%s::%s', $class, $function))
+                    ->setAttribute('service.name', $serviceName)
+                    ->setAttribute('project.name', $projectName)
+                    ->setAttribute('code.function', $function)
+                    ->setAttribute('code.namespace', $class)
+                    ->setAttribute('code.filepath', $filename)
+                    ->setAttribute('code.lineno', $lineno);
+
+                if (!empty($attributes)) {
+                    foreach ($attributes as $key => $value) {
+                        $span->setAttribute($key, $value);
+                    }
+                }
+
+                if (!empty($params)) {
+
+                    // echo $function . PHP_EOL;
+                    // print_r($params);
+                    switch ($function) {
+                        case 'curl_init':
+                            isset($params[0]) && $span->setAttribute('code.params.uri', $params[0]);
+
+                            break;
+                        case 'curl_exec':
+                            $span->setAttribute('code.params.curl', $params[0]);
+
+                            break;
+
+                        case 'fopen':
+                            $span->setAttribute('code.params.filename', $params[0])
+                                ->setAttribute('code.params.mode', $params[1]);
+
+                            break;
+                        case 'fwrite':
+                            $span->setAttribute('code.params.file', $params[0])
+                                ->setAttribute('code.params.data', $params[1]);
+
+                            break;
+                        case 'fread':
+                            $span->setAttribute('code.params.file', $params[0])
+                                ->setAttribute('code.params.length', $params[1]);
+
+                            break;
+
+                        case 'file_get_contents':
+                        case 'file_put_contents':
+                        $span->setAttribute('code.params.filename', $params[0]);
+
+                            break;
+                    }
+                }
+
+                $span = $span->startSpan();
+                Context::storage()->attach($span->storeInContext(Context::getCurrent()));
+            },
+            static function ($object, ?array $params, mixed $return, ?Throwable $exception) use ($tracer) {
+                if (!$scope = Context::storage()->scope()) {
+                    return;
+                }
+                $scope->detach();
+                $span = Span::fromContext($scope->context());
+                if ($exception) {
+                    $span->recordException($exception, [TraceAttributes::EXCEPTION_ESCAPED => true]);
+                    $span->setStatus(StatusCode::STATUS_ERROR, $exception->getMessage());
+                } else {
+                    $span->setStatus(StatusCode::STATUS_OK);
+                }
+                // $exception && $span->recordException($exception);
+                // $span->setStatus($exception ? StatusCode::STATUS_ERROR : StatusCode::STATUS_OK);
+                $span->end();
             }
-        }
-        $span = $span->startSpan();
-
-        // $span = $tracer
-        //     ->spanBuilder(sprintf('%s %s', $request->getMethod(), $request->getUri()))
-        //     ->setSpanKind(SpanKind::KIND_CLIENT)
-        //     ->setAttribute('http.method', $request->getMethod())
-        //     ->setAttribute('http.url', $request->getUri())
-        //     ->startSpan();
-        // $span = $tracer
-        //     ->spanBuilder('get-user')
-        //     ->setAttribute('db.system', 'mysql')
-        //     ->setAttribute('db.name', 'users')
-        //     ->setAttribute('db.user', 'some_user')
-        //     ->setAttribute('db.statement', 'select * from users where username = :1')
-        //     ->startSpan();
-        Context::storage()->attach($span->storeInContext(Context::getCurrent()));
+        );
     }
 
-    public function postTracingCall(): void {
+    public function preTracing(): void {
+        $this->scope->activate();
+
+        // these will support in php8.2 version.
+        // $this->registerHook('fopen', 'fopen');
+        // $this->registerHook('fwrite', 'fwrite');
+        // $this->registerHook('fread', 'fread');
+        // $this->registerHook('file_get_contents', 'file_get_contents');
+        // $this->registerHook('file_put_contents', 'file_put_contents');
+        // $this->registerHook('curl_init', 'curl_init');
+        // $this->registerHook('curl_exec', 'curl_exec');
+    }
+
+    public function postTracing(): void {
         if (!$scope = Context::storage()->scope()) {
             return;
         }
-
         $scope->detach();
-        $span = Span::fromContext($scope->context());
-        $span->setStatus(StatusCode::STATUS_OK);
-        $span->end();
-    }
-
-    public function tracingCall(
-        ?string $className,
-        string $functionName,
-        ?string $fileName,
-        ?iterable $attributes = null): void {
-        $this->preTracingCall($className, $functionName, $fileName, $attributes);
-        $this->postTracingCall();
+        $this->tracerProvider->shutdown();
     }
 }
