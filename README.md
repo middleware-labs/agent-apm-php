@@ -4,9 +4,8 @@
 Description: Agent APM for PHP
 
 ### Prerequisites
-* To monitor APM data on dashboard, [Middleware Host-agent](https://docs.middleware.io/docs/getting-started) needs to be installed, You can refer [this demo project](https://github.com/middleware-labs/demo-apm/tree/master/php) to refer use cases of APM.
-* PHP requires at least PHP 8+ and [OpenTelemetry PHP-Extension](https://opentelemetry.io/docs/instrumentation/php/automatic/#setup) to run this agent.
-
+* To monitor APM data on dashboard, <a href="https://docs.middleware.io/docs/getting-started" target="_blank">Middleware Host-agent</a> needs to be installed, You can refer <a href="https://github.com/middleware-labs/demo-apm/tree/master/php" target="_blank">this demo project</a> to refer use cases of APM.
+* PHP requires at least PHP 8+ and <a href="https://opentelemetry.io/docs/instrumentation/php/automatic/#setup" target="_blank">OpenTelemetry PHP-Extension</a> to run this agent.
 
 ### Guides
 To use this APM agent, follow below steps:
