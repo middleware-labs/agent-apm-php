@@ -9,26 +9,28 @@ Description: Agent APM for PHP
 
 
 ### Guides
-To use this APM agent, you need to follow below steps:
+To use this APM agent, follow below steps:
 1. Run `composer require middleware/agent-apm-php` in your project directory.
 2. After successful installation, you need to add `require 'vendor/autoload.php';` in your file.
 3. Then after, you need to add `use Middleware\AgentApmPhp\MwApmCollector;` line.
-4. Now, you need to add following code to the next line with your Project & Service name.
-`$mwCollector = new MwApmCollector('<PROJECT-NAME>', '<SERVICE-NAME>');`
-5. Then you have 2 functions, named `preTracing()` & `postTracing()`, your code must be placed between these functions. After preTracing() calls, you need to register your desired classes & functions as follows:
+4. Now, add following code to the next line with your Project & Service name:
+   ```
+   $mwCollector = new MwApmCollector('<PROJECT-NAME>', '<SERVICE-NAME>');
+   ```
+5. Then we have 2 functions, named `preTracing()` & `postTracing()`, your code must be placed between these functions. After preTracing() calls, you need to register your desired classes & functions as follows:
    ```
    $mwCollector->preTracing();
    $mwCollector->registerHook('<CLASS-NAME-1>', '<FUNCTION-NAME-1>');
    $mwCollector->registerHook('<CLASS-NAME-2>', '<FUNCTION-NAME-2>');
    ```
-6. You can add your own custom attributes as the third parameter, and you can look many other pre-defined attributes [here](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/). 
+6. You can add your own custom attributes as the third parameter, and checkout many other pre-defined attributes [here](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/). 
    ```
    $mwCollector->registerHook('<CLASS-NAME-1>', '<FUNCTION-NAME-1>', [
        'custom.attr1' => 'value1',
        'custom.attr2' => 'value2',
    ]);
    ``` 
-7. At the end, you need to call `postTracing()` function, which will send all the traces to the Middleware Host-agent.
+7. At the end, just call `postTracing()` function, which will send all the traces to the Middleware Host-agent.
    ```
    $mwCollector->postTracing();
    ```
