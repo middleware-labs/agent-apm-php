@@ -22,8 +22,7 @@
     "open-telemetry/api": "1.0.0beta5",
     "open-telemetry/exporter-otlp": "dev-main",
     "open-telemetry/opentelemetry-auto-psr15": "dev-main",
-    "psr/http-client": "1.0.x-dev",
-    "ext-curl": "*"
+    "psr/http-client": "1.0.x-dev"
   },
   "autoload": {
     "psr-4": {
