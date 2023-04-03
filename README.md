@@ -34,7 +34,7 @@ To use this APM agent, follow below steps:
    ```
    $tracker->postTrack();
    ``` 
-8. If you want to enable logging feature into your project, then you can use below code snippet:
+8. If you want to enable Logging feature along with tracing in your project, then you can use below code snippet:
    ```
    $tracker->warn("this is warning log.");
    $tracker->error("this is error log.");
@@ -45,7 +45,6 @@ To use this APM agent, follow below steps:
    ```
    <?php
    require 'vendor/autoload.php';
-   
    use Middleware\AgentApmPhp\MwTracker;
    
    $tracker = new MwTracker('<PROJECT-NAME>', '<SERVICE-NAME>');

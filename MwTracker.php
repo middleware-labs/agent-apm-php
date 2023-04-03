@@ -226,10 +226,10 @@ final class MwTracker {
             $spanId = $span->getContext()->getSpanId();
         }
 
-        if ($traceId != 0 || $spanId != 0) {
+        /*if ($traceId != 0 || $spanId != 0) {
             echo 'traceId: '. $traceId . PHP_EOL;
             echo 'spanId: ' . $spanId . PHP_EOL;
-        }
+        }*/
 
         $timestamp = time() * 1000000000;
         $this->logger->logEvent(
