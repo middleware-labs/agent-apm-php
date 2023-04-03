@@ -10,6 +10,7 @@ use OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory;
 use OpenTelemetry\Contrib\Otlp\SpanExporter;
 use OpenTelemetry\SDK\Common\Attribute\Attributes;
 use OpenTelemetry\SDK\Common\Configuration\Variables;
+use OpenTelemetry\SDK\Common\Instrumentation\InstrumentationScopeFactory;
 use OpenTelemetry\SDK\Resource\ResourceInfo;
 use OpenTelemetry\SDK\Trace\Span;
 use OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor;
@@ -18,20 +19,29 @@ use OpenTelemetry\API\Trace\TracerInterface;
 use OpenTelemetry\SemConv\ResourceAttributes;
 use OpenTelemetry\SemConv\TraceAttributes;
 
+use OpenTelemetry\API\Logs\EventLogger;
+use OpenTelemetry\API\Logs\LogRecord;
+use OpenTelemetry\Contrib\Otlp\LogsExporter;
+use OpenTelemetry\SDK\Logs\LoggerProvider;
+use OpenTelemetry\SDK\Logs\LogRecordLimitsBuilder;
+use OpenTelemetry\SDK\Logs\Processor\SimpleLogsProcessor;
+
 use OpenTelemetry\API\Common\Instrumentation;
 use function OpenTelemetry\Instrumentation\hook;
 use Throwable;
 
-final class MwApmCollector {
+final class MwTracker {
 
     private string $host = 'localhost';
     private int $exportPort = 9320;
     private string $projectName;
     private string $serviceName;
-    private TracerInterface $tracer;
 
+    private TracerInterface $tracer;
     private Instrumentation\Configurator $scope;
     private TracerProvider $tracerProvider;
+
+    private EventLogger $logger;
 
     public function __construct(string $projectName = null, string $serviceName = null) {
 
@@ -50,23 +60,24 @@ final class MwApmCollector {
         $this->projectName = $projectName;
         $this->serviceName = $serviceName;
 
-        $transport = (new OtlpHttpTransportFactory())->create(
+        // ------ Things for Trace Connection ------
+
+        $traceTransport = (new OtlpHttpTransportFactory())->create(
             'http://' . $this->host . ':' . $this->exportPort . '/v1/traces',
             'application/x-protobuf');
 
-        $exporter = new SpanExporter($transport);
+        $traceExporter = new SpanExporter($traceTransport);
 
         $tracerProvider = new TracerProvider(
-            new SimpleSpanProcessor($exporter),
+            new SimpleSpanProcessor($traceExporter),
             null,
             ResourceInfo::create(Attributes::create([
                 'project.name' => $projectName,
                 ResourceAttributes::SERVICE_NAME => $serviceName,
-                Variables::OTEL_PHP_AUTOLOAD_ENABLED => true,
+                Variables::OTEL_PHP_AUTOLOAD_ENABLED => true
             ]))
         );
 
-        // $tracer = $tracerProvider->getTracer('io.opentelemetry.contrib.php', '1.0.0');
         $tracer = $tracerProvider->getTracer('middleware/agent-apm-php', 'dev-master');
 
         $scope = Instrumentation\Configurator::create()
@@ -75,6 +86,30 @@ final class MwApmCollector {
         $this->tracerProvider = $tracerProvider;
         $this->tracer = $tracer;
         $this->scope = $scope;
+
+        // ------ Things for Log Connection ------
+
+        $logTransport = (new OtlpHttpTransportFactory())->create(
+            'http://' . $this->host . ':' . $this->exportPort . '/v1/logs',
+            'application/json');
+
+        $logExporter = new LogsExporter($logTransport);
+
+        $loggerProvider = new LoggerProvider(
+            new SimpleLogsProcessor($logExporter),
+            new InstrumentationScopeFactory(
+                (new LogRecordLimitsBuilder())->build()->getAttributeFactory()
+            ),
+            ResourceInfo::create(Attributes::create([
+                'project.name' => $projectName,
+                ResourceAttributes::SERVICE_NAME => $serviceName,
+                Variables::OTEL_PHP_AUTOLOAD_ENABLED => true,
+                /*'trace_id' => '1111111111111',
+                'span_id' => '22222222222222',*/
+            ]))
+        );
+
+        $this->logger = new EventLogger($loggerProvider->getLogger('middleware/agent-apm-php', 'dev-master'), 'middleware-apm-domain');
 
     }
 
@@ -161,7 +196,7 @@ final class MwApmCollector {
         );
     }
 
-    public function preTracing(): void {
+    public function preTrack(): void {
         $this->scope->activate();
 
         // these will support in php8.2 version.
@@ -174,11 +209,62 @@ final class MwApmCollector {
         // $this->registerHook('curl_exec', 'curl_exec');
     }
 
-    public function postTracing(): void {
+    public function postTrack(): void {
         if (!$scope = Context::storage()->scope()) {
             return;
         }
         $scope->detach();
         $this->tracerProvider->shutdown();
     }
+
+    private function logging(string $type, int $number, string $text): void {
+        $traceId = '';
+        $spanId = '';
+        if ($scope = Context::storage()->scope()) {
+            $span = Span::fromContext($scope->context());
+            $traceId = $span->getContext()->getTraceId();
+            $spanId = $span->getContext()->getSpanId();
+        }
+
+        if ($traceId != 0 || $spanId != 0) {
+            echo 'traceId: '. $traceId . PHP_EOL;
+            echo 'spanId: ' . $spanId . PHP_EOL;
+        }
+
+        $timestamp = time() * 1000000000;
+        $this->logger->logEvent(
+            'logger',
+            (new LogRecord($text))
+                ->setTimestamp($timestamp)
+                ->setObservedTimestamp($timestamp)
+                ->setSeverityText($type)
+                ->setSeverityNumber($number)
+                ->setAttributes([
+                    'project.name' => $this->projectName,
+                    'service.name' => $this->serviceName,
+                    'mw.app.lang' => 'php',
+                    'fluent.tag' => 'php.app',
+                    'level' => strtolower($type),
+                    'trace_id' => $traceId,
+                    'span_id' => $spanId,
+                ])
+        );
+    }
+
+    public function debug(string $message): void {
+        $this->logging('DEBUG', 5, $message);
+    }
+
+    public function info(string $message): void {
+        $this->logging('INFO', 9, $message);
+    }
+
+    public function warn(string $message): void {
+        $this->logging('WARN', 13, $message);
+    }
+
+    public function error(string $message): void {
+        $this->logging('ERROR', 17, $message);
+    }
+
 }

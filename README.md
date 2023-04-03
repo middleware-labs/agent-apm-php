@@ -5,53 +5,64 @@ Description: Agent APM for PHP
 
 ### Prerequisites
 * To monitor APM data on dashboard, [Middleware Host-agent](https://docs.middleware.io/docs/getting-started) needs to be installed, You can refer [this demo project](https://github.com/middleware-labs/demo-apm/tree/master/php) to refer use cases of APM.
-* PHP requires at least PHP 8+ and [OpenTelemetry PHP-Extension](https://opentelemetry.io/docs/instrumentation/php/automatic/#setup) to run this agent.
+* PHP requires at least PHP 8+ and [OpenTelemetry PHP-Extension](https://opentelemetry.io/docs/instrumentation/php/automatic/#setup ) to run this agent.
 
 
 ### Guides
 To use this APM agent, follow below steps:
 1. Run `composer require middleware/agent-apm-php` in your project directory.
 2. After successful installation, you need to add `require 'vendor/autoload.php';` in your file.
-3. Then after, you need to add `use Middleware\AgentApmPhp\MwApmCollector;` line.
+3. Then after, you need to add `use Middleware\AgentApmPhp\MwTracker;` line.
 4. Now, add following code to the next line with your Project & Service name:
    ```
-   $mwCollector = new MwApmCollector('<PROJECT-NAME>', '<SERVICE-NAME>');
+   $tracker = new MwTracker('<PROJECT-NAME>', '<SERVICE-NAME>');
    ```
-5. Then we have 2 functions, named `preTracing()` & `postTracing()`, your code must be placed between these functions. After preTracing() calls, you need to register your desired classes & functions as follows:
+5. Then we have 2 functions, named `preTrack()` & `postTrack()`, your code must be placed between these functions. After preTrack() calls, you need to register your desired classes & functions as follows:
    ```
-   $mwCollector->preTracing();
-   $mwCollector->registerHook('<CLASS-NAME-1>', '<FUNCTION-NAME-1>');
-   $mwCollector->registerHook('<CLASS-NAME-2>', '<FUNCTION-NAME-2>');
+   $tracker->preTrack();
+   $tracker->registerHook('<CLASS-NAME-1>', '<FUNCTION-NAME-1>');
+   $tracker->registerHook('<CLASS-NAME-2>', '<FUNCTION-NAME-2>');
    ```
 6. You can add your own custom attributes as the third parameter, and checkout many other pre-defined attributes [here](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/). 
    ```
-   $mwCollector->registerHook('<CLASS-NAME-1>', '<FUNCTION-NAME-1>', [
+   $tracker->registerHook('<CLASS-NAME-1>', '<FUNCTION-NAME-1>', [
        'custom.attr1' => 'value1',
        'custom.attr2' => 'value2',
    ]);
    ``` 
-7. At the end, just call `postTracing()` function, which will send all the traces to the Middleware Host-agent.
+7. At the end, just call `postTrack()` function, which will send all the traces to the Middleware Host-agent.
    ```
-   $mwCollector->postTracing();
+   $tracker->postTrack();
+   ``` 
+8. If you want to enable logging feature into your project, then you can use below code snippet:
    ```
-8. So, final code snippet will look like as:
+   $tracker->warn("this is warning log.");
+   $tracker->error("this is error log.");
+   $tracker->info("this is info log.");
+   $tracker->debug("this is debug log.");
+   ```
+9. So, final code snippet will look like as:
    ```
    <?php
    require 'vendor/autoload.php';
    
-   use Middleware\AgentApmPhp\MwApmCollector;
+   use Middleware\AgentApmPhp\MwTracker;
    
-   $mwCollector = new MwApmCollector('<PROJECT-NAME>', '<SERVICE-NAME>');
-   $mwCollector->preTracing();
-   $mwCollector->registerHook('<CLASS-NAME-1>', '<FUNCTION-NAME-1>', [
+   $tracker = new MwTracker('<PROJECT-NAME>', '<SERVICE-NAME>');
+   $tracker->preTrack();
+   $tracker->registerHook('<CLASS-NAME-1>', '<FUNCTION-NAME-1>', [
        'custom.attr1' => 'value1',
        'custom.attr2' => 'value2',
    ]);
-   $mwCollector->registerHook('<CLASS-NAME-2>', '<FUNCTION-NAME-2>');
+   $tracker->registerHook('<CLASS-NAME-2>', '<FUNCTION-NAME-2>');
    
-   // Your code goes here
+   $tracker->info("this is info log.");
    
-   $mwCollector->postTracing();
+   // ----
+   // Your code goes here.
+   // ----
+   
+   $tracker->postTrack();
    ```
 
 
@@ -61,18 +72,19 @@ To use this APM agent, follow below steps:
 ```
 <?php
 require 'vendor/autoload.php';
+use Middleware\AgentApmPhp\MwTracker;
 
-use Middleware\AgentApmPhp\MwApmCollector;
-
-$mwCollector = new MwApmCollector('DemoProject', 'PrintService');
-$mwCollector->preTracing();
-$mwCollector->registerHook('DemoClass', 'runCode', [
+$tracker = new MwTracker('DemoProject', 'PrintService');
+$tracker->preTrack();
+$tracker->registerHook('DemoClass', 'runCode', [
     'code.column' => '12',
     'net.host.name' => 'localhost',
     'db.name' => 'users',
     'custom.attr1' => 'value1',
 ]);
-$mwCollector->registerHook('DoThings', 'printString');
+$tracker->registerHook('DoThings', 'printString');
+
+$tracker->info("this is info log.");
 
 class DoThings {
     public static function printString($str): void {
@@ -89,5 +101,5 @@ class DemoClass {
 
 DemoClass::runCode();
 
-$mwCollector->postTracing();
+$tracker->postTrack();
 ```

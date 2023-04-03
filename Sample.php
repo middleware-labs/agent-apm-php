@@ -1,17 +1,21 @@
 <?php
 require 'vendor/autoload.php';
+use Middleware\AgentApmPhp\MwTracker;
 
-use Middleware\AgentApmPhp\MwApmCollector;
-
-$mwCollector = new MwApmCollector('DemoProject', 'PrintService');
-$mwCollector->preTracing();
-$mwCollector->registerHook('DemoClass', 'runCode', [
+$tracker = new MwTracker('DemoProject', 'PrintService');
+$tracker->preTrack();
+$tracker->registerHook('DemoClass', 'runCode', [
     'code.column' => '12',
     'net.host.name' => 'localhost',
     'db.name' => 'users',
     'custom.attr1' => 'value1',
 ]);
-$mwCollector->registerHook('DoThings', 'printString');
+$tracker->registerHook('DoThings', 'printString');
+
+$tracker->warn("this is warning log.");
+$tracker->error("this is error log.");
+$tracker->info("this is info log.");
+$tracker->debug("this is debug log.");
 
 class DoThings {
     public static function printString($str): void {
@@ -28,4 +32,4 @@ class DemoClass {
 
 DemoClass::runCode();
 
-$mwCollector->postTracing();
+$tracker->postTrack();
