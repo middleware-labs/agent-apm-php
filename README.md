@@ -88,6 +88,9 @@ $tracker->info("this is info log.");
 class DoThings {
     public static function printString($str): void {
         // sleep(1);
+        global $tracker;
+        $tracker->warn("this is warning log, but from inner function.");
+        
         echo $str . PHP_EOL;
     }
 }
