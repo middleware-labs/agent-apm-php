@@ -4,6 +4,7 @@ namespace Middleware\AgentApmPhp;
 
 require 'vendor/autoload.php';
 
+use DateTime;
 use OpenTelemetry\Context\Context;
 use OpenTelemetry\API\Trace\StatusCode;
 use OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory;
@@ -91,7 +92,7 @@ final class MwTracker {
 
         $logTransport = (new OtlpHttpTransportFactory())->create(
             'http://' . $this->host . ':' . $this->exportPort . '/v1/logs',
-            'application/json');
+            'application/x-protobuf');
 
         $logExporter = new LogsExporter($logTransport);
 
@@ -104,8 +105,6 @@ final class MwTracker {
                 'project.name' => $projectName,
                 ResourceAttributes::SERVICE_NAME => $serviceName,
                 Variables::OTEL_PHP_AUTOLOAD_ENABLED => true,
-                /*'trace_id' => '1111111111111',
-                'span_id' => '22222222222222',*/
             ]))
         );
 
@@ -218,36 +217,36 @@ final class MwTracker {
     }
 
     private function logging(string $type, int $number, string $text): void {
+
         $traceId = '';
         $spanId = '';
         if ($scope = Context::storage()->scope()) {
             $span = Span::fromContext($scope->context());
-            $traceId = $span->getContext()->getTraceId();
-            $spanId = $span->getContext()->getSpanId();
+            $spanContext = $span->getContext();
+            $traceId = $spanContext->getTraceId();
+            $spanId = $spanContext->getSpanId();
         }
 
-        /*if ($traceId != 0 || $spanId != 0) {
-            echo 'traceId: '. $traceId . PHP_EOL;
-            echo 'spanId: ' . $spanId . PHP_EOL;
-        }*/
+        $timestamp = (new DateTime())->getTimestamp() * LogRecord::NANOS_PER_SECOND;
 
-        $timestamp = time() * 1000000000;
+        $logRecord = (new LogRecord($text))
+            ->setTimestamp($timestamp)
+            ->setObservedTimestamp($timestamp)
+            ->setSeverityText($type)
+            ->setSeverityNumber($number)
+            ->setAttributes([
+                'project.name' => $this->projectName,
+                'service.name' => $this->serviceName,
+                'mw.app.lang' => 'php',
+                'fluent.tag' => 'php.app',
+                'level' => strtolower($type),
+                'trace_id' => $traceId != 0 ? $traceId : '',
+                'span_id' => $spanId != 0 ? $spanId : '',
+            ]);
+
         $this->logger->logEvent(
             'logger',
-            (new LogRecord($text))
-                ->setTimestamp($timestamp)
-                ->setObservedTimestamp($timestamp)
-                ->setSeverityText($type)
-                ->setSeverityNumber($number)
-                ->setAttributes([
-                    'project.name' => $this->projectName,
-                    'service.name' => $this->serviceName,
-                    'mw.app.lang' => 'php',
-                    'fluent.tag' => 'php.app',
-                    'level' => strtolower($type),
-                    'trace_id' => $traceId,
-                    'span_id' => $spanId,
-                ])
+            $logRecord
         );
     }
 
