@@ -27,7 +27,7 @@ use OpenTelemetry\SDK\Logs\LoggerProvider;
 use OpenTelemetry\SDK\Logs\LogRecordLimitsBuilder;
 use OpenTelemetry\SDK\Logs\Processor\SimpleLogsProcessor;
 
-use OpenTelemetry\API\Instrumentation;
+use OpenTelemetry\API\Common\Instrumentation;
 use function OpenTelemetry\Instrumentation\hook;
 use Throwable;
 
