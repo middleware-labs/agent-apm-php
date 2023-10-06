@@ -13,7 +13,7 @@ use OpenTelemetry\SDK\Common\Attribute\Attributes;
 use OpenTelemetry\SDK\Common\Configuration\Variables;
 use OpenTelemetry\SDK\Common\Instrumentation\InstrumentationScopeFactory;
 use OpenTelemetry\SDK\Resource\ResourceInfo;
-use OpenTelemetry\SDK\Trace\Span;
+use OpenTelemetry\API\Trace\Span;
 use OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor;
 use OpenTelemetry\SDK\Trace\TracerProvider;
 use OpenTelemetry\API\Trace\TracerInterface;
@@ -27,6 +27,7 @@ use OpenTelemetry\SDK\Logs\LoggerProvider;
 use OpenTelemetry\SDK\Logs\LogRecordLimitsBuilder;
 use OpenTelemetry\SDK\Logs\Processor\SimpleLogsProcessor;
 
+use OpenTelemetry\API\Common\Instrumentation\CachedInstrumentation;
 use OpenTelemetry\API\Common\Instrumentation;
 use function OpenTelemetry\Instrumentation\hook;
 use Throwable;
@@ -45,26 +46,30 @@ final class MwTracker {
     private EventLogger $logger;
 
     public function __construct(string $projectName = null, string $serviceName = null) {
-
+        
+        $config = parse_ini_file('config.ini');
+        if(empty($config['OTEL_PROJECT_NAME'])){
+            $config['OTEL_PROJECT_NAME']='Project-'. getmypid();
+        }
+        if(empty($config['OTEL_SERVICE_NAME'])){
+            $config['OTEL_SERVICE_NAME']='Service-'. getmypid();
+        }
         if (!empty(getenv('MW_AGENT_SERVICE'))) {
             $this->host = getenv('MW_AGENT_SERVICE');
+            $config['OTEL_EXPORTER_OTLP_ENDPOINT'] = 'http://' . $this->host . ":" . $this->exportPort; 
         }
+        
+        $this->projectName = $config['OTEL_PROJECT_NAME'];
+        $this->serviceName = $config['OTEL_SERVICE_NAME']; 
 
-        if (empty($projectName)) {
-            $projectName = 'Project-'. getmypid();
+        foreach ($config as $key => $value) {
+            putenv("$key=$value");
         }
-
-        if (empty($serviceName)) {
-            $serviceName = 'Service-'. getmypid();
-        }
-
-        $this->projectName = $projectName;
-        $this->serviceName = $serviceName;
-
+        
         // ------ Things for Trace Connection ------
 
         $traceTransport = (new OtlpHttpTransportFactory())->create(
-            'http://' . $this->host . ':' . $this->exportPort . '/v1/traces',
+            $config['OTEL_EXPORTER_OTLP_ENDPOINT'] . '/v1/traces',
             'application/x-protobuf');
 
         $traceExporter = new SpanExporter($traceTransport);
@@ -73,9 +78,9 @@ final class MwTracker {
             new SimpleSpanProcessor($traceExporter),
             null,
             ResourceInfo::create(Attributes::create([
-                'project.name' => $projectName,
-                ResourceAttributes::SERVICE_NAME => $serviceName,
-                Variables::OTEL_PHP_AUTOLOAD_ENABLED => true
+                'project.name' => $config['OTEL_PROJECT_NAME'],
+                ResourceAttributes::SERVICE_NAME => $config['OTEL_SERVICE_NAME'],
+                Variables::OTEL_PHP_AUTOLOAD_ENABLED => (bool)$config['OTEL_PHP_AUTOLOAD_ENABLED']
             ]))
         );
 
@@ -91,7 +96,7 @@ final class MwTracker {
         // ------ Things for Log Connection ------
 
         $logTransport = (new OtlpHttpTransportFactory())->create(
-            'http://' . $this->host . ':' . $this->exportPort . '/v1/logs',
+            $config['OTEL_EXPORTER_OTLP_ENDPOINT'] . '/v1/logs',
             'application/x-protobuf');
 
         $logExporter = new LogsExporter($logTransport);
@@ -102,9 +107,9 @@ final class MwTracker {
                 (new LogRecordLimitsBuilder())->build()->getAttributeFactory()
             ),
             ResourceInfo::create(Attributes::create([
-                'project.name' => $projectName,
-                ResourceAttributes::SERVICE_NAME => $serviceName,
-                Variables::OTEL_PHP_AUTOLOAD_ENABLED => true,
+                'project.name' => $config['OTEL_PROJECT_NAME'],
+                ResourceAttributes::SERVICE_NAME => $config['OTEL_SERVICE_NAME'],
+                Variables::OTEL_PHP_AUTOLOAD_ENABLED => (bool)$config['OTEL_PHP_AUTOLOAD_ENABLED']
             ]))
         );
 
@@ -128,7 +133,6 @@ final class MwTracker {
                     ->setAttribute('code.namespace', $class)
                     ->setAttribute('code.filepath', $filename)
                     ->setAttribute('code.lineno', $lineno);
-
                 if (!empty($attributes)) {
                     foreach ($attributes as $key => $value) {
                         $span->setAttribute($key, $value);
@@ -136,9 +140,6 @@ final class MwTracker {
                 }
 
                 if (!empty($params)) {
-
-                    // echo $function . PHP_EOL;
-                    // print_r($params);
                     switch ($function) {
                         case 'curl_init':
                             isset($params[0]) && $span->setAttribute('code.params.uri', $params[0]);
@@ -188,8 +189,6 @@ final class MwTracker {
                 } else {
                     $span->setStatus(StatusCode::STATUS_OK);
                 }
-                // $exception && $span->recordException($exception);
-                // $span->setStatus($exception ? StatusCode::STATUS_ERROR : StatusCode::STATUS_OK);
                 $span->end();
             }
         );
@@ -198,14 +197,15 @@ final class MwTracker {
     public function preTrack(): void {
         $this->scope->activate();
 
-        // these will support in php8.2 version.
-        // $this->registerHook('fopen', 'fopen');
-        // $this->registerHook('fwrite', 'fwrite');
-        // $this->registerHook('fread', 'fread');
-        // $this->registerHook('file_get_contents', 'file_get_contents');
-        // $this->registerHook('file_put_contents', 'file_put_contents');
-        // $this->registerHook('curl_init', 'curl_init');
-        // $this->registerHook('curl_exec', 'curl_exec');
+        /* these will support in php8.2 version.
+        * $this->registerHook('fopen', 'fopen');
+        * $this->registerHook('fwrite', 'fwrite');
+        * $this->registerHook('fread', 'fread');
+        * $this->registerHook('file_get_contents', 'file_get_contents');
+        * $this->registerHook('file_put_contents', 'file_put_contents');
+        * $this->registerHook('curl_init', 'curl_init');
+        * $this->registerHook('curl_exec', 'curl_exec');
+        */
     }
 
     public function postTrack(): void {
@@ -214,6 +214,44 @@ final class MwTracker {
         }
         $scope->detach();
         $this->tracerProvider->shutdown();
+    }
+    
+    public function instrumentFunction($className, $functionName, ?iterable $attributes = null): void{
+        /**
+        * Auto Instrument the code.
+        *
+        * @param className Class name with Namespace
+        * @param functionName Function name that need to be instrumented
+        * @param attributes Custom attributes if any to be set in span
+        */
+        hook(
+            class: $className,
+            function: $functionName,
+            pre: function ($classN, array $params, string $class, string $function, ?string $filename, ?int $lineno) use ($attributes) {
+                $this->scope->activate();
+                static $instrumentation;
+                $instrumentation ??= new CachedInstrumentation($class, null, null, array('service.name'=> $this->serviceName,'project.name' => $this->projectName));
+                $span = $instrumentation->tracer()->spanBuilder($class . "::" . $function);
+                if (!empty($attributes)) {
+                    print_r($attributes);
+                    foreach ($attributes as $key => $value) {
+                        $span->setAttribute($key, $value);
+                    }
+                }
+                $span=$span->startSpan();
+                Context::storage()->attach($span->storeInContext(Context::getCurrent()));
+            },
+            post: function ($class, array $params, $returnValue, ?Throwable $exception) {
+                $scope = Context::storage()->scope();
+                $scope->detach();
+                $span = Span::fromContext($scope->context());
+                if ($exception) {
+                    $span->recordException($exception);
+                    $span->setStatus(StatusCode::STATUS_ERROR);
+                }
+                $span->end();
+            }
+        );
     }
 
     private function logging(string $type, int $number, string $text): void {
