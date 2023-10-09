@@ -1,7 +1,6 @@
 # Getting Started
 
-### agent-apm-php
-Description: Agent APM for PHP
+**Description**: Agent APM for PHP
 
 ### Prerequisites
 * To monitor APM data on dashboard, [Middleware Host-agent](https://docs.middleware.io/docs/getting-started) needs to be installed, You can refer [this demo project](https://github.com/middleware-labs/demo-apm/tree/master/php) to refer use cases of APM.
@@ -9,6 +8,9 @@ Description: Agent APM for PHP
 
 
 ### Guides
+
+#### Manual Instrumentation
+
 To use this APM agent, follow below steps:
 1. Run `composer require middleware/agent-apm-php` in your project directory.
 2. After successful installation, you need to add `require 'vendor/autoload.php';` in your file.
@@ -64,10 +66,7 @@ To use this APM agent, follow below steps:
    $tracker->postTrack();
    ```
 
-
-*Note: OTEL collector endpoint for all the traces, will be `http://localhost:9320/v1/traces` by default.*
-
-### Sample Code
+#### Sample Code
 ```
 <?php
 require 'vendor/autoload.php';
@@ -105,3 +104,83 @@ DemoClass::runCode();
 
 $tracker->postTrack();
 ```
+
+###Auto Instrumentation
+
+To use this APM agent, follow below steps:
+1. Run `composer require middleware/agent-apm-php` in your project directory.
+2. After successful installation, you need to add `require 'vendor/autoload.php';` in your file.
+3. Then after, you need to add `use Middleware\AgentApmPhp\MwTracker;` line.
+4. Now, add following code to the next line with your Project & Service name:
+   ```
+   $tracker = new MwTracker('<PROJECT-NAME>', '<SERVICE-NAME>');
+   ```
+5. You can add your own custom attributes as the third parameter, and checkout many other pre-defined attributes [here](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/). 
+   ```
+   $tracker->$tracker->instrumentFunction('<CLASS-NAME-1>', '<FUNCTION-NAME-1>', [
+       'custom.attr1' => 'value1',
+       'custom.attr2' => 'value2',
+   ]);
+   ``` 
+6. At the end, just call `postTrack()` function, which will send all the traces to the Middleware Host-agent.
+   ```
+   $tracker->postTrack();
+   ``` 
+7. So, final code snippet will look like as:
+   ```
+   <?php
+   require 'vendor/autoload.php';
+   use Middleware\AgentApmPhp\MwTracker;
+   
+   $tracker = new MwTracker('<PROJECT-NAME>', '<SERVICE-NAME>');
+
+   // ----
+   // Your code goes here.
+   // ----
+
+   $tracker->instrumentFunction(<CLASS-NAME-1>,<FUNCTION-NAME-1>, [
+    'custom.attr1' => 'value1',
+    'custom.attr2' => 'value2'
+   ]);
+   $tracker->instrumentFunction(<CLASS-NAME-2>,<FUNCTION-NAME-2>)
+   $tracker->postTrack();
+   ```
+
+#### Sample Code
+```
+<?php
+require 'vendor/autoload.php';
+require "MwTracker.php";
+
+use Middleware\AgentApmPhp\MwTracker;
+
+$tracker = new MwTracker('DemoProject', 'PrintService');
+
+class DoThingsAuto {
+    public function printString($str): void {
+        echo $str . PHP_EOL;
+    }
+}
+class DemoClassAuto {
+    public function runCode(): void {
+        $print = new DoThingsAuto();
+        $print->printString('Welcome to Auto Instrumented Function!');
+    }
+}
+
+$tracker->instrumentFunction(DemoClassAuto::class,"runCode",[
+    'code.column' => '12',
+    'net.host.name' => 'localhost',
+    'db.name' => 'users',
+    'custom.attr10' => 'value10',
+]);
+$tracker->instrumentFunction(DoThingsAuto::class,"printString");
+
+$demo = new DemoClassAuto();
+$demo->runCode();
+
+$tracker->postTrack();
+```
+
+
+**Note**: *OTEL collector endpoint for all the traces, will be `http://localhost:9320/v1/traces` by default.*
