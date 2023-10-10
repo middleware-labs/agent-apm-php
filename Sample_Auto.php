@@ -1,6 +1,5 @@
 <?php
 require 'vendor/autoload.php';
-require "MwTracker.php";
 
 use Middleware\AgentApmPhp\MwTracker;
 
