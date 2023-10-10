@@ -1,26 +1,7 @@
 <?php
 require 'vendor/autoload.php';
 
-use Middleware\AgentApmPhp\MwTracker;
-
-/**
-* Mannual Instrument example.
-*/
-
-$tracker = new MwTracker('DemoProject', 'PrintService');
-$tracker->preTrack();
-$tracker->registerHook('DemoClass', 'runCode', [
-    'code.column' => '12',
-    'net.host.name' => 'localhost',
-    'db.name' => 'users',
-    'custom.attr10' => 'value10',
-]);
-$tracker->registerHook('DoThings', 'printString', ['code.column' => '12']);
-
-$tracker->warn("this is warning log.");
-$tracker->error("this is error log.");
-$tracker->info("this is info log.");
-$tracker->debug("this is debug log.");
+include "mw-instrumentation/mw-instrument-man.php";
 
 class DoThings {
     public static function printString($str): void {

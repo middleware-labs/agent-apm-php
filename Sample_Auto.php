@@ -1,14 +1,10 @@
 <?php
 require 'vendor/autoload.php';
 
-use Middleware\AgentApmPhp\MwTracker;
-
 /**
 * Auto Instrument example.
 * Note: Only non static functions can be autoinstrumented.
 */
-
-$tracker = new MwTracker('DemoProject', 'PrintService');
 
 class DoThingsAuto {
     public function printString($str): void {
@@ -22,15 +18,6 @@ class DemoClassAuto {
         $print->printString('Welcome to Auto Instrumented Function!');
     }
 }
-
-$tracker->instrumentFunction(DemoClassAuto::class,"runCode",[
-    'code.column' => '12',
-    'net.host.name' => 'localhost',
-    'db.name' => 'users',
-    'custom.attr10' => 'value10',
-]);
-$tracker->instrumentFunction(DoThingsAuto::class,"printString");
-
 
 $demo = new DemoClassAuto();
 $demo->runCode();
