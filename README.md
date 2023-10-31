@@ -29,6 +29,12 @@
 		$tracker->postTrack();
 >
 ```
+5. We also need to provide a configuration file as a command-line argument:
+```shell
+ $php <file_name> --config config.ini 
+```
+_NOTE:_ If no config path is provided, default location is config.ini in base repo.
+
 ### Instrumentation
 In instrumentation file that you just created you can need to add some common code irrespective of whether you choose auto instrumentation or manual.
 ```php

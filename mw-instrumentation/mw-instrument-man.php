@@ -2,7 +2,21 @@
 
 use Middleware\AgentApmPhp\MwTracker;
 
-$tracker = new MwTracker('DemoProject', 'PrintService');
+global $tracker;
+if($argc >= 3 && in_array($argv[1], array('-c','--config'))){
+    if(file_exists($argv[2])){
+        $tracker = new MwTracker($argv[2]);
+    }else{
+        throw new Exception("Config file not found");
+    }
+}
+else{
+    if(file_exists('config.ini')){
+        echo "No config file in arguments so using default config.ini file.\n";
+        $tracker = new MwTracker();
+    }else
+    throw new Exception("Please provide config file");
+}
 
 $tracker->preTrack();
 $tracker->registerHook('DemoClass', 'runCode', [

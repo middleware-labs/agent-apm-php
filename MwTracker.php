@@ -45,9 +45,9 @@ final class MwTracker {
 
     private EventLogger $logger;
 
-    public function __construct(string $projectName = null, string $serviceName = null) {
+    public function __construct(string $config_file = "config.ini") {
         
-        $config = parse_ini_file('config.ini');
+        $config = parse_ini_file($config_file);
         if(empty($config['OTEL_PROJECT_NAME'])){
             $config['OTEL_PROJECT_NAME']='Project-'. getmypid();
         }
